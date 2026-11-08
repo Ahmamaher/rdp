@@ -6,7 +6,7 @@ A small, public, zero-secret GitHub Actions runner for **safe, allow-listed main
 
 - Runs only when the repository owner `Ahmamaher` opens an issue whose title starts with `[ONEAI-RUN]`.
 - Accepts a strict JSON task body with exactly one field: `operation`.
-- Supports three built-in operations: `health`, `self_test`, and `code_audit`.
+- Supports four fixed operations: `health`, `self_test`, `code_audit`, and `repo_integrity`.
 - Posts a compact result as an issue comment.
 - Uses Python's standard library only. No model API key, external service secret, Docker, or paid API is required.
 
@@ -29,10 +29,11 @@ Supported operations:
 | Operation | Purpose |
 |---|---|
 | `health` | Report Python/runtime and runner environment information |
-| `self_test` | Run the runner's standard-library unit tests |
-| `code_audit` | Parse tracked Python source files and report syntax errors |
+| `self_test` | Exercise authorization, title, JSON-schema, and operation allow-list checks |
+| `code_audit` | Parse Python source files and report syntax errors |
+| `repo_integrity` | Check for sensitive file names and high-confidence credential patterns without printing secret values |
 
-The workflow is on-demand. It is **not** a permanent server, does not run an LLM, and does not connect to a private One AI control endpoint.
+The task workflow runs 10 standard-library unit tests and a Python syntax check before each operation. A separate CI workflow repeats those tests on pushes and pull requests. The issue-triggered worker is on-demand. It is **not** a permanent server, does not run an LLM, and does not connect to a private One AI control endpoint.
 
 ## Security boundaries
 
@@ -50,4 +51,4 @@ GitHub states that standard GitHub-hosted runner usage is free for public reposi
 
 ## ChatGPT + One AI usage
 
-ChatGPT can create a task issue through the connected GitHub integration, then read the result comment. One AI remains the local command center and persistent memory/database. This runner is a separate, stateless execution lane; it does not receive One AI's local database or credentials.
+ChatGPT can create a task issue through the connected GitHub integration, then read the result comment. The task body must contain only a public, non-sensitive operation name. One AI remains the local command center and persistent memory/database. This runner is a separate, stateless execution lane; it does not receive One AI's local database or credentials, and it is not a direct automatic queue bridge.
