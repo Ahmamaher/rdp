@@ -1,0 +1,28 @@
+name: One AI Runner Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oneai-runner-tests
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Test allow-list and authorization guards
+        run: python3 -m unittest discover -s .github -p 'test_*.py' -v
+      - name: Check Python syntax
+        run: python3 -m py_compile .github/oneai_runner.py .github/test_oneai_runner.py
