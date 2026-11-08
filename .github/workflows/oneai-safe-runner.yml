@@ -24,6 +24,10 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Run runner unit tests
+        run: python3 -m unittest discover -s .github -p 'test_*.py' -v
+      - name: Check runner syntax
+        run: python3 -m py_compile .github/oneai_runner.py .github/test_oneai_runner.py
       - name: Execute fixed operation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
