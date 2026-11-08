@@ -1,0 +1,32 @@
+name: One AI Safe Cloud Runner
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: oneai-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  run-allowlisted-task:
+    if: >-
+      github.event.sender.login == 'Ahmamaher' &&
+      startsWith(github.event.issue.title, '[ONEAI-RUN]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout runner source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Execute fixed operation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: python .github/oneai_runner.py
