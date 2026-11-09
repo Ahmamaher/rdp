@@ -108,7 +108,42 @@ def self_test() -> str:
         except ValueError:
             continue
         raise AssertionError("A malformed, unauthorized, or unsupported request was accepted.")
-    return "Self-test passed: owner gate, title gate, exact JSON schema, operation allow-list, issue number, and malformed payload rejection."
+    versioned = {
+        "sender": {"login": OWNER},
+        "issue": {
+            "number": 8,
+            "title": "[ONEAI-RUN] versioned self-test",
+            "body": json.dumps({
+                "schema_version": 1,
+                "correlation_id": "selftest_123456789",
+                "operation": "health",
+                "requested_at": "2026-11-09T03:00:00Z",
+            }),
+        },
+    }
+    if parse_event(versioned) != (8, "health", "selftest_123456789"):
+        raise AssertionError("A valid versioned task envelope was not accepted.")
+    invalid_versioned = [
+        {**versioned, "issue": {**versioned["issue"], "body": json.dumps({
+            "schema_version": 1, "correlation_id": "x", "operation": "health",
+            "requested_at": "2026-11-09T03:00:00Z",
+        })}},
+        {**versioned, "issue": {**versioned["issue"], "body": json.dumps({
+            "schema_version": 1, "correlation_id": "selftest_123456789", "operation": "health",
+            "requested_at": "2026-11-09T03:00:00",
+        })}},
+        {**versioned, "issue": {**versioned["issue"], "body": json.dumps({
+            "schema_version": 1, "correlation_id": "selftest_123456789", "operation": "health",
+            "requested_at": "2026-11-09T03:00:00Z", "command": "whoami",
+        })}},
+    ]
+    for event in invalid_versioned:
+        try:
+            parse_event(event)
+        except ValueError:
+            continue
+        raise AssertionError("An invalid versioned task envelope was accepted.")
+    return "Self-test passed: legacy and versioned schemas, correlation ID validation, timezone validation, unknown-key rejection, owner/title gates, operation allow-list, issue number, and malformed payload rejection."
 
 
 def code_audit() -> str:
