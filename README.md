@@ -5,6 +5,7 @@ A small, public, zero-secret GitHub Actions runner for **safe, allow-listed main
 ## What it does
 
 - Runs only when the repository owner `Ahmamaher` opens an issue whose title starts with `[ONEAI-RUN]`.
+- Each issue is a one-shot task. Create a new issue for each run; reopening an old issue does not launch another job.
 - Accepts a strict JSON task body with exactly one field: `operation`.
 - Supports four fixed operations: `health`, `self_test`, `code_audit`, and `repo_integrity`.
 - Posts a compact result as an issue comment.
