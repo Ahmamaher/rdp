@@ -200,7 +200,9 @@ def main() -> int:
         result = handlers[operation]()
         body = (
             "## One AI Cloud Runner\n\n"
-            f"**Operation:** {operation}\n\n{result}\n\n"
+            f"**Operation:** {operation}\\n"
+            + (f"**Correlation ID:** `{correlation_id}`\\n" if correlation_id else "")
+            + f"\\n{result}\\n\\n"
             "_Bounded, stateless GitHub Actions job. It did not access private One AI files, "
             "credentials, or local services._"
         )
