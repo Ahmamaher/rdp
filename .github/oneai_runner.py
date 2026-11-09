@@ -93,7 +93,7 @@ def self_test() -> str:
 
 def code_audit() -> str:
     root = pathlib.Path(".")
-    files = [p for p in root.rglob("*.py") if not any(part in IGNORED_DIRS for part in p.parts)]
+    files = [p for p in root.rglob("*.py") if not p.is_symlink() and not any(part in IGNORED_DIRS for part in p.parts)]
     errors = []
     for path in files:
         try:
@@ -111,7 +111,7 @@ def repo_integrity() -> str:
     secret_hits = []
     scanned = 0
     for path in root.rglob("*"):
-        if not path.is_file() or any(part in IGNORED_DIRS for part in path.parts):
+        if path.is_symlink() or not path.is_file() or any(part in IGNORED_DIRS for part in path.parts):
             continue
         if is_sensitive_path(path):
             bad_paths.append(path.as_posix())
