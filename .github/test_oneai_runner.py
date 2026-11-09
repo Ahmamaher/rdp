@@ -10,7 +10,26 @@ class ParseEventTests(unittest.TestCase):
         return {"sender": {"login": sender}, "issue": {"number": number, "title": title, "body": body}}
 
     def test_accepts_valid_owner_request(self):
-        self.assertEqual(runner.parse_event(self.event()), (1, "health"))
+        self.assertEqual(runner.parse_event(self.event()), (1, "health", None))
+
+    def test_accepts_versioned_task_envelope(self):
+        body = '{"schema_version":1,"correlation_id":"task_1234567890","operation":"health","requested_at":"2026-11-09T03:00:00+02:00"}'
+        self.assertEqual(runner.parse_event(self.event(body=body)), (1, "health", "task_1234567890"))
+
+    def test_rejects_unknown_versioned_envelope_keys(self):
+        body = '{"schema_version":1,"correlation_id":"task_1234567890","operation":"health","requested_at":"2026-11-09T03:00:00Z","command":"whoami"}'
+        with self.assertRaises(ValueError):
+            runner.parse_event(self.event(body=body))
+
+    def test_rejects_invalid_correlation_id(self):
+        body = '{"schema_version":1,"correlation_id":"x","operation":"health","requested_at":"2026-11-09T03:00:00Z"}'
+        with self.assertRaises(ValueError):
+            runner.parse_event(self.event(body=body))
+
+    def test_rejects_timezone_free_requested_at(self):
+        body = '{"schema_version":1,"correlation_id":"task_1234567890","operation":"health","requested_at":"2026-11-09T03:00:00"}'
+        with self.assertRaises(ValueError):
+            runner.parse_event(self.event(body=body))
 
     def test_rejects_non_owner(self):
         with self.assertRaises(ValueError):
