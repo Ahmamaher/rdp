@@ -3,10 +3,9 @@ import json
 import os
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
-from provenance_fetcher import (
-    MAX_RESPONSE_BYTES, SnapshotFetchError, _get_json, fetch_provenance,
-)
+from provenance_fetcher import MAX_RESPONSE_BYTES, SnapshotFetchError, _get_json, fetch_provenance
 
 
 class FakeResponse:
@@ -89,6 +88,7 @@ class ProvenanceFetcherTests(unittest.TestCase):
         self.assertEqual(result["status"], "verified")
         self.assertEqual(len(urls), 4)
         self.assertTrue(all(url.startswith("https://api.github.com/repos/Ahmamaher/rdp/") for url in urls))
+        self.assertTrue(urls[-1].endswith("/jobs?per_page=100"))
 
     def test_network_error_maps_to_pending(self):
         with patch("provenance_fetcher.urlopen", side_effect=OSError("private detail")):
@@ -98,14 +98,13 @@ class ProvenanceFetcherTests(unittest.TestCase):
         self.assertNotIn("private detail", str(result))
 
     def test_rate_limit_maps_to_pending(self):
-        from urllib.error import HTTPError
         error = HTTPError("https://api.github.com", 429, "rate limited", {}, None)
         with patch("provenance_fetcher.urlopen", side_effect=error):
             result = fetch_provenance(issue_number=24, comment_id=6731589908, run_id=42557086084)
         self.assertEqual(result["status"], "pending_verification")
         self.assertEqual(result["reasons"], ["transient_http_429"])
 
-    def test_oversized_response_rejected_as_pending(self):
+    def test_oversized_response_is_rejected(self):
         with patch("provenance_fetcher.urlopen", return_value=FakeResponse(b"x" * (MAX_RESPONSE_BYTES + 1))):
             with self.assertRaises(SnapshotFetchError) as caught:
                 _get_json("/issues/24")
@@ -131,5 +130,5 @@ class ProvenanceFetcherTests(unittest.TestCase):
         self.assertNotIn("DO_NOT_LEAK_THIS", str(result))
 
 
-if __ (unittest.main(verbosity=2)):
-    pass
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
