@@ -31,7 +31,7 @@ New version-1 requests may instead use this exact envelope (the correlation ID i
 {"schema_version":1,"correlation_id":"task_1234567890","operation":"health","requested_at":"2026-11-09T04:05:00Z"}
 ```
 
-The correlation ID must be 12–64 letters, digits, underscores, or hyphens. `requested_at` must include a timezone. Unknown keys are rejected. Legacy one-key requests remain supported for compatibility.
+The correlation ID must be 12–64 letters, digits, underscores, or hyphens. `requested_at` must include a timezone and be no more than 10 minutes old when the issue is opened (5 seconds of clock-skew tolerance; future timestamps are rejected). Unknown keys are rejected. Legacy one-key requests remain supported for compatibility but do not carry freshness metadata.
 
 Supported operations:
 
