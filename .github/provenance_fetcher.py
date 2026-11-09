@@ -41,7 +41,7 @@ def _get_json(path: str) -> dict | list:
     # Exact endpoint allow-list: no arbitrary paths, hosts, or query strings.
     allowed_path = re.fullmatch(
         r"/(?:issues/[1-9][0-9]{0,19}|issues/comments/[1-9][0-9]{0,19}|"
-        r"actions/runs/[1-9][0-9]{0,19}|actions/runs/[1-9][0-9]{0,19}/jobs\\?per_page=100)",
+        r"actions/runs/[1-9][0-9]{0,19}|actions/runs/[1-9][0-9]{0,19}/jobs\?per_page=100)",
         path,
     )
     if not allowed_path:
