@@ -38,7 +38,7 @@ def _one(pattern: str, body: str, field: str):
 
 
 def validate_provenance(
-    *, repository_full_name: str, issue: dict, comment: dict,
+    *, repository_full_name: str, expected_comment_id: int, issue: dict, comment: dict,
     run: dict, jobs: list, freshness_seconds: int = 600,
     clock_skew_seconds: int = 5,
 ) -> dict:
@@ -85,9 +85,16 @@ def validate_provenance(
         comment_body = comment.get("body")
         if not isinstance(comment_body, str):
             return reject("invalid_comment_body", "comment_identity")
+        if isinstance(expected_comment_id, bool) or not isinstance(expected_comment_id, int) or expected_comment_id < 1:
+            return reject("invalid_expected_comment_id", "comment_identity")
+        if comment.get("id") != expected_comment_id:
+            return reject("comment_id_mismatch", "comment_identity")
+        expected_issue_url = f"https://api.github.com/repos/{EXPECTED_REPOSITORY}/issues/{number}"
+        expected_comment_html = f"https://github.com/{EXPECTED_REPOSITORY}/issues/{number}#issuecomment-{expected_comment_id}"
+        if comment.get("html_url") != expected_comment_html:
+            return reject("comment_url_mismatch", "comment_identity")
         if (comment.get("user") or {}).get("login") != EXPECTED_COMMENT_AUTHOR:
             return reject("invalid_comment_author", "comment_identity")
-        expected_issue_url = f"https://api.github.com/repos/{EXPECTED_REPOSITORY}/issues/{number}"
         if comment.get("issue_url") != expected_issue_url:
             return reject("comment_issue_mismatch", "comment_identity")
 
