@@ -3,6 +3,8 @@ import unittest
 import os
 import pathlib
 import tempfile
+from datetime import datetime, timedelta, timezone
+import json
 import oneai_runner as runner
 
 class ParseEventTests(unittest.TestCase):
@@ -13,8 +15,31 @@ class ParseEventTests(unittest.TestCase):
         self.assertEqual(runner.parse_event(self.event()), (1, "health", None))
 
     def test_accepts_versioned_task_envelope(self):
-        body = '{"schema_version":1,"correlation_id":"task_1234567890","operation":"health","requested_at":"2026-11-09T03:00:00+02:00"}'
+        body = json.dumps({
+            "schema_version": 1,
+            "correlation_id": "task_1234567890",
+            "operation": "health",
+            "requested_at": datetime.now().astimezone().isoformat(),
+        })
         self.assertEqual(runner.parse_event(self.event(body=body)), (1, "health", "task_1234567890"))
+
+    def test_rejects_stale_versioned_request(self):
+        stale = (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()
+        body = json.dumps({
+            "schema_version": 1, "correlation_id": "task_1234567890",
+            "operation": "health", "requested_at": stale,
+        })
+        with self.assertRaisesRegex(ValueError, "stale"):
+            runner.parse_event(self.event(body=body))
+
+    def test_rejects_future_versioned_request(self):
+        future = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+        body = json.dumps({
+            "schema_version": 1, "correlation_id": "task_1234567890",
+            "operation": "health", "requested_at": future,
+        })
+        with self.assertRaisesRegex(ValueError, "future"):
+            runner.parse_event(self.event(body=body))
 
     def test_rejects_unknown_versioned_envelope_keys(self):
         body = '{"schema_version":1,"correlation_id":"task_1234567890","operation":"health","requested_at":"2026-11-09T03:00:00Z","command":"whoami"}'
