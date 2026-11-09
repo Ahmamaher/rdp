@@ -38,12 +38,13 @@ def _identifier(value: object, name: str) -> int:
 
 
 def _get_json(path: str) -> dict | list:
-    # The only query string allowed is the fixed, bounded jobs page.
-    if (
-        not path.startswith("/")
-        or ".." in path
-        or ("?" in path and not path.endswith("/jobs?per_page=100"))
-    ):
+    # Exact endpoint allow-list: no arbitrary paths, hosts, or query strings.
+    allowed_path = re.fullmatch(
+        r"/(?:issues/[1-9][0-9]{0,19}|issues/comments/[1-9][0-9]{0,19}|"
+        r"actions/runs/[1-9][0-9]{0,19}|actions/runs/[1-9][0-9]{0,19}/jobs\\?per_page=100)",
+        path,
+    )
+    if not allowed_path:
         raise ValueError("invalid_fixed_api_path")
     headers = {
         "Accept": "application/vnd.github+json",
