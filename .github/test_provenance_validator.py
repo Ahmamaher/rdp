@@ -48,11 +48,7 @@ def fixture():
             "run_started_at": "2026-11-09T03:33:51Z",
             "updated_at": "2026-11-09T03:34:01Z",
         },
-        "jobs": [{
-            "name": "run-allowlisted-task",
-            "status": "completed",
-            "conclusion": "success",
-        }],
+        "jobs": [{"name": "run-allowlisted-task", "status": "completed", "conclusion": "success"}],
     }
 
 
@@ -68,8 +64,9 @@ class ProvenanceValidatorTests(unittest.TestCase):
         payload = json.loads(data["issue"]["body"])
         payload["requested_at"] = "2026-11-09T03:00:00Z"
         data["issue"]["body"] = json.dumps(payload)
-        self.assertIn("freshness", self.validate(data)["checks"])
-        self.assertEqual(self.validate(data)["status"], "rejected")
+        result = self.validate(data)
+        self.assertFalse(result["checks"].get("freshness", True))
+        self.assertEqual(result["status"], "rejected")
 
     def test_rejects_wrong_repository(self):
         data = fixture()
@@ -105,5 +102,5 @@ class ProvenanceValidatorTests(unittest.TestCase):
         self.assertEqual(self.validate(data)["status"], "rejected")
 
 
-if __ (name__ == "__main__"):
+if __name__ == "__main__":
     unittest.main(verbosity=2)
