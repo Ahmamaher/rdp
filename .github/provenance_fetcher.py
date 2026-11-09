@@ -1,9 +1,8 @@
 """Read-only, fixed-origin GitHub snapshot fetcher for One AI provenance.
 
-This module accepts identifiers only (never caller-provided URLs), talks only
-to api.github.com for the fixed public repository, caps response size and
-timeouts, and never logs or returns authorization headers. Transient transport
-or rate-limit failures map to pending_verification, not rejected.
+Accepts numeric identifiers only (never caller-provided URLs), uses only the
+fixed api.github.com repository, caps response size/timeouts, and never logs
+or returns authorization headers. Temporary failures map to pending.
 """
 from __future__ import annotations
 
@@ -19,13 +18,11 @@ REPOSITORY = "Ahmamaher/rdp"
 API_ROOT = "https://api.github.com/repos/" + REPOSITORY
 MAX_RESPONSE_BYTES = 1_000_000
 TIMEOUT_SECONDS = 10
-IDENTIFIER_RE = re.compile(r"[1-9][0-9]{0,19}\\Z")
+IDENTIFIER_RE = re.compile(r"[1-9][0-9]{0,19}\Z")
 TRANSIENT_HTTP = {403, 408, 425, 429, 500, 502, 503, 504}
 
 
 class SnapshotFetchError(Exception):
-    """A fetch failure with a safe machine-readable category."""
-
     def __init__(self, category: str):
         super().__init__(category)
         self.category = category
@@ -41,8 +38,12 @@ def _identifier(value: object, name: str) -> int:
 
 
 def _get_json(path: str) -> dict | list:
-    # Paths are assembled only by fetch_provenance from validated numeric IDs.
-    if not path.startswith("/") or "?" in path or ".." in path:
+    # The only query string allowed is the fixed, bounded jobs page.
+    if (
+        not path.startswith("/")
+        or ".." in path
+        or ("?" in path and not path.endswith("/jobs?per_page=100"))
+    ):
         raise ValueError("invalid_fixed_api_path")
     headers = {
         "Accept": "application/vnd.github+json",
@@ -76,11 +77,7 @@ def _get_json(path: str) -> dict | list:
 
 
 def fetch_provenance(*, issue_number: int, comment_id: int, run_id: int) -> dict:
-    """Fetch fixed GitHub API snapshots and validate their provenance.
-
-    Returns verified/rejected from the pure validator, or pending_verification
-    for network/API availability failures. No write requests are issued.
-    """
+    """Fetch four fixed GitHub API resources and validate their snapshots."""
     try:
         issue_number = _identifier(issue_number, "issue_number")
         comment_id = _identifier(comment_id, "comment_id")
@@ -95,7 +92,11 @@ def fetch_provenance(*, issue_number: int, comment_id: int, run_id: int) -> dict
             raise SnapshotFetchError("invalid_jobs_response")
         if jobs_payload.get("total_count", len(jobs_payload["jobs"])) > 100:
             raise SnapshotFetchError("job_page_limit_exceeded")
-        if issue.get("number") != issue_number or comment.get("id") != comment_id or run.get("id") != run_id:
+        if (
+            issue.get("number") != issue_number
+            or comment.get("id") != comment_id
+            or run.get("id") != run_id
+        ):
             return {
                 "status": "rejected",
                 "checks": {"fetched_resource_identity": False},
@@ -110,11 +111,7 @@ def fetch_provenance(*, issue_number: int, comment_id: int, run_id: int) -> dict
             jobs=jobs_payload["jobs"],
         )
     except SnapshotFetchError as exc:
-        return {
-            "status": "pending_verification",
-            "checks": {},
-            "reasons": [exc.category],
-        }
+        return {"status": "pending_verification", "checks": {}, "reasons": [exc.category]}
     except ValueError as exc:
         return {
             "status": "rejected",
