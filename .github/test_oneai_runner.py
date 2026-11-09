@@ -46,6 +46,15 @@ class ParseEventTests(unittest.TestCase):
     def test_handlers_do_not_require_third_party_packages(self):
         self.assertIn("standard library only", runner.health())
 
+    def test_diagnostic_findings_fail_the_job(self):
+        self.assertTrue(runner.operation_failed("code_audit", "Python syntax audit FAILED:\\n- broken.py"))
+        self.assertTrue(runner.operation_failed("repo_integrity", "Potential repository hygiene issue detected"))
+
+    def test_clean_diagnostics_do_not_fail_the_job(self):
+        self.assertFalse(runner.operation_failed("code_audit", "Python syntax audit passed: 2 Python files parsed successfully."))
+        self.assertFalse(runner.operation_failed("repo_integrity", "Repository integrity scan passed."))
+        self.assertFalse(runner.operation_failed("health", "Health check passed."))
+
     def test_env_examples_are_not_flagged(self):
         for name in (".env.example", ".env.sample", ".env.template"):
             self.assertFalse(runner.is_sensitive_path(pathlib.Path(name)))
