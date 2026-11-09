@@ -25,4 +25,4 @@ jobs:
       - name: Test allow-list and authorization guards
         run: python3 -m unittest discover -s .github -p 'test_*.py' -v
       - name: Check Python syntax
-        run: python3 -m py_compile .github/oneai_runner.py .github/test_oneai_runner.py
+        run: python3 -m py_compile .github/oneai_runner.py .github/test_oneai_runner.py .github/provenance_validator.py .github/test_provenance_validator.py
