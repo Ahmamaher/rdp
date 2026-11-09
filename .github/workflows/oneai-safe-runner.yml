@@ -26,8 +26,15 @@ jobs:
           persist-credentials: false
       - name: Run runner unit tests
         run: python3 -m unittest discover -s .github -p 'test_*.py' -v
-      - name: Check runner syntax
-        run: python3 -m py_compile .github/oneai_runner.py .github/test_oneai_runner.py .github/provenance_validator.py .github/test_provenance_validator.py
+      - name: Check runner and provenance syntax
+        run: >-
+          python3 -m py_compile
+          .github/oneai_runner.py
+          .github/test_oneai_runner.py
+          .github/provenance_validator.py
+          .github/test_provenance_validator.py
+          .github/provenance_fetcher.py
+          .github/test_provenance_fetcher.py
       - name: Execute fixed operation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
