@@ -8,7 +8,7 @@ A small, public, zero-secret GitHub Actions runner for **safe, allow-listed main
 - Each issue is a one-shot task. Create a new issue for each run; reopening an old issue does not launch another job.
 - Accepts either the legacy strict JSON body `{"operation":"health"}` or the exact version-1 envelope with `schema_version`, `correlation_id`, `operation`, and timezone-aware `requested_at`.
 - Supports four fixed operations: `health`, `self_test`, `code_audit`, and `repo_integrity`.
-- Posts a compact result as an issue comment.
+- Posts a compact result as an issue comment, including the workflow run URL, run ID, and attempt when running in GitHub Actions.
 - Uses Python's standard library only. No model API key, external service secret, Docker, or paid API is required.
 
 ## Trigger a task
