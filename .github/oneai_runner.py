@@ -233,10 +233,17 @@ def main() -> int:
         issue_number, operation, correlation_id = parse_event(event)
         handlers = {"health": health, "self_test": self_test, "code_audit": code_audit, "repo_integrity": repo_integrity}
         result = handlers[operation]()
+        server_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+        repository = os.environ.get("GITHUB_REPOSITORY", "")
+        run_id = os.environ.get("GITHUB_RUN_ID", "")
+        run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+        run_url = f"{server_url}/{repository}/actions/runs/{run_id}" if repository and run_id else ""
         body = (
             "## One AI Cloud Runner\n\n"
             f"**Operation:** {operation}\n"
             + (f"**Correlation ID:** `{correlation_id}`\n" if correlation_id else "")
+            + (f"**Workflow run:** {run_url}\n" if run_url else "")
+            + (f"**Run ID / attempt:** `{run_id}` / `{run_attempt}`\n" if run_id else "")
             + f"\n{result}\n\n"
             "_Bounded, stateless GitHub Actions job. It did not access private One AI files, "
             "credentials, or local services._"
