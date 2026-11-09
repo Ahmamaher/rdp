@@ -15,6 +15,17 @@ ALLOWED = {"health", "self_test", "code_audit", "repo_integrity"}
 IGNORED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules"}
 SENSITIVE_NAMES = {".env", "mcp_bridge.token", "vault.key", "credentials.json", "id_rsa", "id_ed25519", "secrets.json"}
 SENSITIVE_SUFFIXES = {".sqlite", ".sqlite3", ".db", ".pem", ".p12", ".pfx", ".key"}
+
+
+def is_sensitive_path(path: pathlib.Path) -> bool:
+    name = path.name.lower()
+    if name in {".env.example", ".env.sample", ".env.template"}:
+        return False
+    if name in SENSITIVE_NAMES or path.suffix.lower() in SENSITIVE_SUFFIXES:
+        return True
+    if name.startswith(".env.") or name in {"credentials", "secrets", "token", "mcp_bridge.token"}:
+        return True
+    return False
 SECRET_PATTERNS = (
     ("GitHub token", re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")),
     ("GitHub fine-grained token", re.compile(r"github_pat_[A-Za-z0-9_]{20,}")),
@@ -102,10 +113,8 @@ def repo_integrity() -> str:
     for path in root.rglob("*"):
         if not path.is_file() or any(part in IGNORED_DIRS for part in path.parts):
             continue
-        name = path.name.lower()
-        if name in SENSITIVE_NAMES or path.suffix.lower() in SENSITIVE_SUFFIXES:
-            if name not in {".env.example", ".env.sample"}:
-                bad_paths.append(path.as_posix())
+        if is_sensitive_path(path):
+            bad_paths.append(path.as_posix())
         try:
             if path.stat().st_size > 2_000_000:
                 continue
