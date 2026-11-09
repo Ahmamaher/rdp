@@ -21,6 +21,7 @@ def fixture():
     )
     return {
         "repository_full_name": "Ahmamaher/rdp",
+        "expected_comment_id": 6731589908,
         "issue": {
             "number": 24,
             "title": "[ONEAI-RUN] fresh provenance validation fixture",
@@ -29,6 +30,8 @@ def fixture():
             "created_at": "2026-11-09T03:33:48Z",
         },
         "comment": {
+            "id": 6731589908,
+            "html_url": "https://github.com/Ahmamaher/rdp/issues/24#issuecomment-6731589908",
             "user": {"login": "github-actions[bot]"},
             "issue_url": "https://api.github.com/repos/Ahmamaher/rdp/issues/24",
             "created_at": "2026-11-09T03:33:56Z",
@@ -96,6 +99,11 @@ class ProvenanceValidatorTests(unittest.TestCase):
     def test_rejects_missing_or_failed_runner_step(self):
         data = fixture()
         data["jobs"][0]["steps"][2]["conclusion"] = "failure"
+        self.assertEqual(self.validate(data)["status"], "rejected")
+
+    def test_rejects_comment_id_mismatch(self):
+        data = fixture()
+        data["comment"]["id"] = 999
         self.assertEqual(self.validate(data)["status"], "rejected")
 
     def test_rejects_comment_correlation_mismatch(self):
