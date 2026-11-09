@@ -87,3 +87,28 @@ The integration is not complete until tests demonstrate all of the following:
 8. No external side effect occurs without a separate explicit approval.
 
 Until these tests pass, describe the system as a local One AI application plus a separate event-driven GitHub Actions runner with a manual/limited result-import path—not as a fully integrated cloud agent.
+
+
+## 9. Independent provenance verification contract
+
+The local importer must not trust provenance fields copied from an issue comment. It must fetch the referenced GitHub resources independently, using a fixed repository allow-list and bounded HTTP timeouts.
+
+For a candidate result associated with issue N and run R, verify all of the following before changing its state to `verified`:
+
+1. **Issue identity:** fetch `GET /repos/Ahmamaher/rdp/issues/N`; require the exact repository, expected `[ONEAI-RUN]` title prefix, sender login `Ahmamaher`, and a valid version-1 task envelope.
+2. **Comment identity:** fetch the issue comments; select the exact comment URL/ID; require author `github-actions[bot]`, and require its issue URL to point to issue N.
+3. **Task correlation:** parse the issue body and result comment as data. Require exact equality for operation and correlation ID. Reject missing or duplicated conflicting metadata.
+4. **Workflow run identity:** fetch `GET /repos/Ahmamaher/rdp/actions/runs/R`; require `id == R`, repository `Ahmamaher/rdp`, workflow path `.github/workflows/oneai-safe-runner.yml`, expected workflow ID, event `issues`, status `completed`, conclusion `success`, actor/triggering actor `Ahmamaher`, and `run_attempt` equal to the comment value.
+5. **Run URL:** reconstruct the canonical URL from the fixed GitHub host, repository, and numeric run ID; compare it exactly with the comment URL. Do not fetch arbitrary hosts supplied by the comment.
+6. **Temporal consistency:** parse all timestamps as timezone-aware UTC values. Require issue creation <= workflow run start <= workflow run completion <= comment creation, allowing only a small documented clock-skew tolerance. Require `requested_at` not to be after issue creation and not older than the configured dispatch freshness window. A stale request must be rejected or quarantined, not silently accepted.
+7. **Workflow execution:** fetch the run's jobs endpoint and require the expected runner job to be completed successfully. Preserve job and step summaries as evidence; do not treat an arbitrary successful job as proof of the expected operation.
+8. **Safe failure:** network errors, 403/rate limits, missing fields, malformed JSON, mismatches, or timeouts leave the record `pending_verification` or `unverified_external`. Never fall back to trusting the comment. Never retry in a tight loop.
+
+Use a small explicit state machine: `unverified_external -> pending_verification -> verified`; any mismatch transitions to `rejected`. A temporary API/rate-limit failure is not a mismatch and must not transition to `rejected`. Keep the original raw evidence and a structured list of checks, but never persist credentials or response headers.
+
+### Observed verification fixture (2026-11-09)
+
+Issue #23, run #42552642615, and comment #6730995975 were fetched independently. The run record confirmed repository `Ahmamaher/rdp`, workflow path `.github/workflows/oneai-safe-runner.yml`, event `issues`, completed/success, actor `Ahmamaher`, and attempt 1. The jobs endpoint showed the expected `run-allowlisted-task` job and its test, syntax, and execution steps completed successfully. The issue body and comment agreed on operation `self_test` and correlation ID `task_provenance_20261109`.
+
+**Important fixture failure:** the issue body recorded `requested_at=2026-11-09T04:18:00+02:00` (02:18:00Z), while the issue was created at 02:45:10Z. This is a 27-minute-old request at dispatch. The run itself succeeded, but the fixture must fail a strict 10-minute dispatch-freshness rule. Therefore this example proves the independent GitHub API lookup path and cross-resource correlation, not a fully passing production provenance validation. Keep it unverified until a fresh, correctly timestamped fixture passes the complete validator.
+
