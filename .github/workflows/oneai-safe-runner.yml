@@ -2,7 +2,7 @@ name: One AI Safe Cloud Runner
 
 on:
   issues:
-    types: [opened, reopened]
+    types: [opened]
 
 permissions:
   contents: read
