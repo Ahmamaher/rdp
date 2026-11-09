@@ -131,7 +131,23 @@ def validate_provenance(
         ]
         if len(matching_jobs) != 1:
             return reject("expected_runner_job_not_successful_or_ambiguous", "workflow_job")
+        expected_steps = {
+            "Checkout runner source",
+            "Run runner unit tests",
+            "Check runner syntax",
+            "Execute fixed operation",
+        }
+        step_rows = matching_jobs[0].get("steps")
+        if not isinstance(step_rows, list):
+            return reject("runner_job_steps_missing", "workflow_steps")
+        successful_steps = {
+            step.get("name") for step in step_rows
+            if step.get("status") == "completed" and step.get("conclusion") == "success"
+        }
+        if not expected_steps.issubset(successful_steps):
+            return reject("required_runner_step_not_successful", "workflow_steps")
         checks["workflow_job"] = True
+        checks["workflow_steps"] = True
 
         run_started = _time(run.get("run_started_at"), "run_started_at")
         run_completed = _time(run.get("updated_at"), "run_completed_at")
