@@ -48,7 +48,17 @@ def fixture():
             "run_started_at": "2026-11-09T03:33:51Z",
             "updated_at": "2026-11-09T03:34:01Z",
         },
-        "jobs": [{"name": "run-allowlisted-task", "status": "completed", "conclusion": "success"}],
+        "jobs": [{
+            "name": "run-allowlisted-task",
+            "status": "completed",
+            "conclusion": "success",
+            "steps": [
+                {"name": "Checkout runner source", "status": "completed", "conclusion": "success"},
+                {"name": "Run runner unit tests", "status": "completed", "conclusion": "success"},
+                {"name": "Check runner syntax", "status": "completed", "conclusion": "success"},
+                {"name": "Execute fixed operation", "status": "completed", "conclusion": "success"},
+            ],
+        }],
     }
 
 
@@ -81,6 +91,11 @@ class ProvenanceValidatorTests(unittest.TestCase):
     def test_rejects_failed_expected_job(self):
         data = fixture()
         data["jobs"][0]["conclusion"] = "failure"
+        self.assertEqual(self.validate(data)["status"], "rejected")
+
+    def test_rejects_missing_or_failed_runner_step(self):
+        data = fixture()
+        data["jobs"][0]["steps"][2]["conclusion"] = "failure"
         self.assertEqual(self.validate(data)["status"], "rejected")
 
     def test_rejects_comment_correlation_mismatch(self):
