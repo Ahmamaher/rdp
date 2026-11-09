@@ -12,6 +12,8 @@ import sys
 import urllib.request
 
 OWNER = "Ahmamaher"
+REQUEST_MAX_AGE_SECONDS = 600
+REQUEST_CLOCK_SKEW_SECONDS = 5
 ALLOWED = {"health", "self_test", "code_audit", "repo_integrity"}
 IGNORED_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules"}
 SENSITIVE_NAMES = {".env", "mcp_bridge.token", "vault.key", "credentials.json", "id_rsa", "id_ed25519", "secrets.json"}
@@ -68,6 +70,11 @@ def parse_event(event: dict) -> tuple[int, str, str | None]:
             raise ValueError("Rejected: requested_at must be an ISO-8601 timestamp.") from exc
         if parsed_time.tzinfo is None or parsed_time.utcoffset() is None:
             raise ValueError("Rejected: requested_at must include a timezone.")
+        request_age = (datetime.now(parsed_time.tzinfo) - parsed_time).total_seconds()
+        if request_age < -REQUEST_CLOCK_SKEW_SECONDS:
+            raise ValueError("Rejected: requested_at is in the future.")
+        if request_age > REQUEST_MAX_AGE_SECONDS:
+            raise ValueError("Rejected: task request is stale.")
     else:
         raise ValueError('Body must use either {"operation":"..."} or the exact version-1 task envelope.')
     operation = payload["operation"]
@@ -117,7 +124,7 @@ def self_test() -> str:
                 "schema_version": 1,
                 "correlation_id": "selftest_123456789",
                 "operation": "health",
-                "requested_at": "2026-11-09T03:00:00Z",
+                "requested_at": datetime.now().astimezone().isoformat(),
             }),
         },
     }
@@ -126,7 +133,7 @@ def self_test() -> str:
     invalid_versioned = [
         {**versioned, "issue": {**versioned["issue"], "body": json.dumps({
             "schema_version": 1, "correlation_id": "x", "operation": "health",
-            "requested_at": "2026-11-09T03:00:00Z",
+            "requested_at": datetime.now().astimezone().isoformat(),
         })}},
         {**versioned, "issue": {**versioned["issue"], "body": json.dumps({
             "schema_version": 1, "correlation_id": "selftest_123456789", "operation": "health",
@@ -134,7 +141,7 @@ def self_test() -> str:
         })}},
         {**versioned, "issue": {**versioned["issue"], "body": json.dumps({
             "schema_version": 1, "correlation_id": "selftest_123456789", "operation": "health",
-            "requested_at": "2026-11-09T03:00:00Z", "command": "whoami",
+            "requested_at": datetime.now().astimezone().isoformat(), "command": "whoami",
         })}},
     ]
     for event in invalid_versioned:
