@@ -1,5 +1,8 @@
 """Unit tests for the safe cloud runner."""
 import unittest
+import os
+import pathlib
+import tempfile
 import oneai_runner as runner
 
 class ParseEventTests(unittest.TestCase):
@@ -42,6 +45,27 @@ class ParseEventTests(unittest.TestCase):
 
     def test_handlers_do_not_require_third_party_packages(self):
         self.assertIn("standard library only", runner.health())
+
+    def test_env_examples_are_not_flagged(self):
+        for name in (".env.example", ".env.sample", ".env.template"):
+            self.assertFalse(runner.is_sensitive_path(pathlib.Path(name)))
+
+    def test_env_variants_and_database_files_are_flagged(self):
+        for name in (".env.production", "app.db", "credentials.json", "mcp_bridge.token"):
+            self.assertTrue(runner.is_sensitive_path(pathlib.Path(name)))
+
+    def test_integrity_scan_reports_sensitive_paths_without_values(self):
+        original = pathlib.Path.cwd()
+        with tempfile.TemporaryDirectory() as temp:
+            os.chdir(temp)
+            try:
+                pathlib.Path(".env.production").write_text("EXAMPLE_SECRET_VALUE_DO_NOT_PRINT", encoding="utf-8")
+                pathlib.Path("safe.txt").write_text("ordinary text", encoding="utf-8")
+                report = runner.repo_integrity()
+                self.assertIn(".env.production", report)
+                self.assertNotIn("EXAMPLE_SECRET_VALUE_DO_NOT_PRINT", report)
+            finally:
+                os.chdir(original)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
