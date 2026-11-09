@@ -139,6 +139,15 @@ def repo_integrity() -> str:
     )
 
 
+def operation_failed(operation: str, result: str) -> bool:
+    """Return a failing process status when a diagnostic operation finds a problem."""
+    if operation == "code_audit":
+        return result.startswith("Python syntax audit FAILED:")
+    if operation == "repo_integrity":
+        return result.startswith("Potential repository hygiene issue detected")
+    return False
+
+
 def post_comment(issue_number: int, body: str) -> None:
     token = os.environ["GITHUB_TOKEN"]
     repo = os.environ["GITHUB_REPOSITORY"]
@@ -177,7 +186,7 @@ def main() -> int:
         )
         post_comment(issue_number, body)
         print(body)
-        return 0
+        return 1 if operation_failed(operation, result) else 0
     except Exception as exc:
         print(f"Runner failed safely: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
