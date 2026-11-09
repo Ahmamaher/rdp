@@ -39,8 +39,8 @@ Do not add a free-form `command`, `script`, `prompt`, `arguments`, or `files` fi
 
 ## 4. Result envelope and provenance
 
-A result should be correlated to the issue number, operation, and opaque correlation ID. Preserve:
-- runner identity and workflow run URL;
+A result should be correlated to the issue number, operation, and opaque correlation ID. The runner now includes the GitHub Actions workflow run URL, run ID, and run attempt in its result comment when those environment values are present. A future local validator must independently fetch the referenced run and confirm repository, workflow identity, issue event, conclusion, and run ID before accepting provenance. Preserve:
+- runner identity and workflow run URL, run ID, and attempt;
 - issue and comment URLs;
 - operation and completion timestamp;
 - bounded result summary;
