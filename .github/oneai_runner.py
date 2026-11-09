@@ -2,6 +2,7 @@
 """Owner-gated, allow-listed GitHub issue task runner. Standard library only."""
 from __future__ import annotations
 import ast
+from datetime import datetime
 import json
 import os
 import pathlib
@@ -36,7 +37,7 @@ SECRET_PATTERNS = (
 )
 
 
-def parse_event(event: dict) -> tuple[int, str]:
+def parse_event(event: dict) -> tuple[int, str, str | None]:
     issue = event.get("issue") or {}
     sender = event.get("sender") or {}
     if sender.get("login") != OWNER:
@@ -48,15 +49,34 @@ def parse_event(event: dict) -> tuple[int, str]:
         payload = json.loads(raw)
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValueError("Rejected: issue body must contain valid JSON.") from exc
-    if not isinstance(payload, dict) or set(payload) != {"operation"}:
-        raise ValueError('Body must be JSON with exactly one key: {"operation":"..."}')
+    if not isinstance(payload, dict):
+        raise ValueError("Rejected: task payload must be a JSON object.")
+    if set(payload) == {"operation"}:
+        correlation_id = None  # Backward compatibility for existing one-shot issues.
+    elif set(payload) == {"schema_version", "correlation_id", "operation", "requested_at"}:
+        if payload["schema_version"] != 1 or isinstance(payload["schema_version"], bool):
+            raise ValueError("Rejected: unsupported task schema version.")
+        correlation_id = payload["correlation_id"]
+        if not isinstance(correlation_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", correlation_id):
+            raise ValueError("Rejected: invalid correlation_id.")
+        requested_at = payload["requested_at"]
+        if not isinstance(requested_at, str):
+            raise ValueError("Rejected: requested_at must be an ISO-8601 timestamp.")
+        try:
+            parsed_time = datetime.fromisoformat(requested_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("Rejected: requested_at must be an ISO-8601 timestamp.") from exc
+        if parsed_time.tzinfo is None or parsed_time.utcoffset() is None:
+            raise ValueError("Rejected: requested_at must include a timezone.")
+    else:
+        raise ValueError('Body must use either {"operation":"..."} or the exact version-1 task envelope.')
     operation = payload["operation"]
     if not isinstance(operation, str) or operation not in ALLOWED:
         raise ValueError(f"Unsupported operation. Allowed: {', '.join(sorted(ALLOWED))}")
     number = issue.get("number")
     if isinstance(number, bool) or not isinstance(number, int) or number < 1:
         raise ValueError("Missing or invalid issue number.")
-    return number, operation
+    return number, operation, correlation_id
 
 
 def health() -> str:
@@ -71,7 +91,7 @@ def health() -> str:
 
 def self_test() -> str:
     valid = {"sender": {"login": OWNER}, "issue": {"number": 1, "title": "[ONEAI-RUN] test", "body": '{"operation":"health"}'}}
-    if parse_event(valid) != (1, "health"):
+    if parse_event(valid) != (1, "health", None):
         raise AssertionError("Valid owner request was not accepted.")
     rejected = [
         {"sender": {"login": "untrusted"}, "issue": valid["issue"]},
@@ -175,7 +195,7 @@ def main() -> int:
         return 2
     try:
         event = json.loads(pathlib.Path(event_path).read_text(encoding="utf-8"))
-        issue_number, operation = parse_event(event)
+        issue_number, operation, correlation_id = parse_event(event)
         handlers = {"health": health, "self_test": self_test, "code_audit": code_audit, "repo_integrity": repo_integrity}
         result = handlers[operation]()
         body = (
