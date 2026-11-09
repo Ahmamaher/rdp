@@ -63,6 +63,20 @@ class ParseEventTests(unittest.TestCase):
         for name in (".env.production", "app.db", "credentials.json", "mcp_bridge.token"):
             self.assertTrue(runner.is_sensitive_path(pathlib.Path(name)))
 
+    def test_integrity_scan_does_not_follow_symlinks(self):
+        original = pathlib.Path.cwd()
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            os.chdir(root)
+            try:
+                target = pathlib.Path(outside) / "outside.txt"
+                target.write_text("SYMLINK_TARGET_CONTENT_MUST_NOT_BE_READ", encoding="utf-8")
+                pathlib.Path("linked.txt").symlink_to(target)
+                report = runner.repo_integrity()
+                self.assertIn("Text files scanned: 0", report)
+                self.assertNotIn("SYMLINK_TARGET_CONTENT_MUST_NOT_BE_READ", report)
+            finally:
+                os.chdir(original)
+
     def test_integrity_scan_reports_sensitive_paths_without_values(self):
         original = pathlib.Path.cwd()
         with tempfile.TemporaryDirectory() as temp:
