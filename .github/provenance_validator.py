@@ -1,13 +1,13 @@
 """Pure snapshot validator for One AI GitHub runner provenance.
 
-This module validates already-fetched GitHub API snapshots. The caller is
-responsible for fetching each resource independently from the fixed GitHub
-host/repository, applying timeouts, and mapping transient fetch failures to
-pending_verification rather than rejected.
+Validates independently fetched API snapshots; it performs no network access.
+The caller must fetch only from the fixed GitHub host/repository, use bounded
+timeouts, and map temporary fetch failures to pending_verification.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import re
 
 EXPECTED_REPOSITORY = "Ahmamaher/rdp"
@@ -18,7 +18,7 @@ EXPECTED_COMMENT_AUTHOR = "github-actions[bot]"
 EXPECTED_JOB_NAME = "run-allowlisted-task"
 ALLOWED_OPERATIONS = {"health", "self_test", "code_audit", "repo_integrity"}
 CORRELATION_RE = re.compile(r"[A-Za-z0-9_-]{12,64}")
-RUN_URL_RE = re.compile(r"https://github\\.com/Ahmamaher/rdp/actions/runs/([0-9]+)\\Z")
+RUN_URL_RE = re.compile(r"https://github\.com/Ahmamaher/rdp/actions/runs/([0-9]+)\Z")
 
 
 def _time(value: object, field: str) -> datetime:
@@ -30,7 +30,7 @@ def _time(value: object, field: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _one(pattern: str, body: str, field: str) -> str:
+def _one(pattern: str, body: str, field: str):
     matches = re.findall(pattern, body, flags=re.MULTILINE)
     if len(matches) != 1:
         raise ValueError(f"missing_or_duplicate_{field}")
@@ -38,16 +38,11 @@ def _one(pattern: str, body: str, field: str) -> str:
 
 
 def validate_provenance(
-    *,
-    repository_full_name: str,
-    issue: dict,
-    comment: dict,
-    run: dict,
-    jobs: list,
-    freshness_seconds: int = 600,
+    *, repository_full_name: str, issue: dict, comment: dict,
+    run: dict, jobs: list, freshness_seconds: int = 600,
     clock_skew_seconds: int = 5,
 ) -> dict:
-    """Return {status, checks, reasons}; never performs network access."""
+    """Return a verified/rejected result with individual checks."""
     checks: dict[str, bool] = {}
     reasons: list[str] = []
 
@@ -64,13 +59,12 @@ def validate_provenance(
         number = issue.get("number")
         if isinstance(number, bool) or not isinstance(number, int) or number < 1:
             return reject("invalid_issue_number", "issue_identity")
-        if issue.get("title", "").startswith("[ONEAI-RUN]") is False:
+        if not isinstance(issue.get("title"), str) or not issue["title"].startswith("[ONEAI-RUN]"):
             return reject("invalid_issue_title", "issue_identity")
         if (issue.get("user") or {}).get("login") != EXPECTED_ACTOR:
             return reject("invalid_issue_author", "issue_identity")
         checks["issue_identity"] = True
 
-        import json
         payload = json.loads(issue.get("body") or "")
         if not isinstance(payload, dict) or set(payload) != {
             "schema_version", "correlation_id", "operation", "requested_at"
@@ -82,32 +76,32 @@ def validate_provenance(
         operation = payload.get("operation")
         if not isinstance(correlation_id, str) or not CORRELATION_RE.fullmatch(correlation_id):
             return reject("invalid_correlation_id", "task_envelope")
-        if operation not in ALLOWED_OPERATIONS:
+        if not isinstance(operation, str) or operation not in ALLOWED_OPERATIONS:
             return reject("operation_not_allowlisted", "task_envelope")
         requested_at = _time(payload.get("requested_at"), "requested_at")
         issue_created = _time(issue.get("created_at"), "issue_created_at")
         checks["task_envelope"] = True
 
-        comment_body = comment.get("body") or ""
-        if (comment.get("user") or {}).get("login") != EXPECTED_COMMENT_AUTHOR:
-            return reject("invalid_comment_author", "comment_identity")
-        if comment.get("issue_url") != f"https://api.github.com/repos/{EXPECTED_REPOSITORY}/issues/{number}":
-            return reject("comment_issue_mismatch", "comment_identity")
+        comment_body = comment.get("body")
         if not isinstance(comment_body, str):
             return reject("invalid_comment_body", "comment_identity")
+        if (comment.get("user") or {}).get("login") != EXPECTED_COMMENT_AUTHOR:
+            return reject("invalid_comment_author", "comment_identity")
+        expected_issue_url = f"https://api.github.com/repos/{EXPECTED_REPOSITORY}/issues/{number}"
+        if comment.get("issue_url") != expected_issue_url:
+            return reject("comment_issue_mismatch", "comment_identity")
 
-        comment_operation = _one(r"^\\*\\*Operation:\\*\\* ([a-z_]+)$", comment_body, "operation")
-        comment_correlation = _one(r"^\\*\\*Correlation ID:\\*\\* `([A-Za-z0-9_-]+)`$", comment_body, "correlation_id")
-        comment_run_url = _one(r"^\\*\\*Workflow run:\\*\\* (https://[^\\s]+)$", comment_body, "run_url")
-        run_line = _one(r"^\\*\\*Run ID / attempt:\\*\\* `([0-9]+)` / `([0-9]+)`$", comment_body, "run_id_attempt")
+        comment_operation = _one(r"^\*\*Operation:\*\* ([a-z_]+)$", comment_body, "operation")
+        comment_correlation = _one(r"^\*\*Correlation ID:\*\* `([A-Za-z0-9_-]+)`$", comment_body, "correlation_id")
+        comment_run_url = _one(r"^\*\*Workflow run:\*\* (https://[^\s]+)$", comment_body, "run_url")
+        run_line = _one(r"^\*\*Run ID / attempt:\*\* `([0-9]+)` / `([0-9]+)`$", comment_body, "run_id_attempt")
         if comment_operation != operation or comment_correlation != correlation_id:
             return reject("task_comment_correlation_mismatch", "task_correlation")
         checks["comment_identity"] = True
         checks["task_correlation"] = True
 
         run_id_text, attempt_text = run_line
-        run_id = int(run_id_text)
-        attempt = int(attempt_text)
+        run_id, attempt = int(run_id_text), int(attempt_text)
         url_match = RUN_URL_RE.fullmatch(comment_run_url)
         if not url_match or int(url_match.group(1)) != run_id:
             return reject("noncanonical_or_mismatched_run_url", "run_url")
@@ -129,13 +123,13 @@ def validate_provenance(
             return reject("run_attempt_mismatch", "workflow_run")
         checks["workflow_run"] = True
 
-        completed_jobs = [
+        matching_jobs = [
             job for job in jobs
             if job.get("name") == EXPECTED_JOB_NAME
             and job.get("status") == "completed"
             and job.get("conclusion") == "success"
         ]
-        if len(completed_jobs) != 1:
+        if len(matching_jobs) != 1:
             return reject("expected_runner_job_not_successful_or_ambiguous", "workflow_job")
         checks["workflow_job"] = True
 
