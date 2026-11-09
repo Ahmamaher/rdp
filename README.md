@@ -33,7 +33,7 @@ Supported operations:
 | `code_audit` | Parse Python source files and report syntax errors |
 | `repo_integrity` | Check for sensitive file names and high-confidence credential patterns without printing secret values |
 
-The task workflow runs 13 standard-library unit tests and a Python syntax check before each operation. The issue-triggered worker is on-demand. It is **not** a permanent server, does not run an LLM, and does not connect to a private One AI control endpoint.
+The task workflow runs 15 standard-library unit tests and a Python syntax check before each operation. Diagnostic findings in `code_audit` or `repo_integrity` are posted as comments and also make the workflow fail, so problems cannot be reported as a successful run. The issue-triggered worker is on-demand. It is **not** a permanent server, does not run an LLM, and does not connect to a private One AI control endpoint.
 
 ## Security boundaries
 
